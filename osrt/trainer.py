@@ -2,10 +2,10 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
-import srt.utils.visualize as vis
-from srt.utils.common import mse2psnr, reduce_dict, gather_all
-from srt.utils import nerf
-from srt.utils.common import get_rank
+import osrt.utils.visualize as vis
+from osrt.utils.common import mse2psnr, reduce_dict, gather_all, compute_adjusted_rand_index
+from osrt.utils import nerf
+from osrt.utils.common import get_rank, get_world_size
 
 import os
 import math
@@ -90,6 +90,18 @@ class SRTTrainer:
             loss_terms['coarse_mse'] = coarse_loss
             loss = loss + coarse_loss
 
+        if 'segmentation' in extras:
+            pred_seg = extras['segmentation']
+            true_seg = data['target_masks'].to(device).float()
+
+            # These are not actually used as part of the training loss. 
+            # We just add the to the dict to report them.
+            loss_terms['ari'] = compute_adjusted_rand_index(true_seg.transpose(1, 2),
+                                                            pred_seg.transpose(1, 2))
+
+            loss_terms['fg_ari'] = compute_adjusted_rand_index(true_seg.transpose(1, 2)[:, 1:],
+                                                               pred_seg.transpose(1, 2))
+
         return loss, loss_terms
 
     def eval_step(self, data, full_scale=False):
@@ -113,13 +125,13 @@ class SRTTrainer:
         camera_pos = camera_pos.unsqueeze(1).repeat(1, rays.shape[1], 1)
 
         max_num_rays = self.config['data']['num_points'] * \
-                self.config['training']['batch_size'] // rays.shape[0]
+                self.config['training']['batch_size'] // (rays.shape[0] * get_world_size())
         num_rays = rays.shape[1]
         img = torch.zeros_like(rays)
         all_extras = []
         for i in range(0, num_rays, max_num_rays):
             img[:, i:i+max_num_rays], extras = self.model.decoder(
-                z=z, x=camera_pos[:, i:i+max_num_rays], rays=rays[:, i:i+max_num_rays],
+                z, camera_pos[:, i:i+max_num_rays], rays[:, i:i+max_num_rays],
                 **render_kwargs)
             all_extras.append(extras)
 
@@ -192,6 +204,9 @@ class SRTTrainer:
                     depth_img = extras['depth'].unsqueeze(-1) / self.render_kwargs['max_dist']
                     depth_img = depth_img.view(batch_size, height, width, 1)
                     columns.append((f'depths {angle_deg}°', depth_img.cpu().numpy(), 'image'))
+
+                if 'segmentation' in extras:
+                    columns.append((f'pred seg {angle_deg}°', extras['segmentation'].argmax(-1).cpu().numpy(), 'clustering'))
 
             output_img_path = os.path.join(self.out_dir, f'renders-{mode}')
             vis.draw_visualization_grid(columns, output_img_path)

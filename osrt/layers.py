@@ -85,7 +85,7 @@ class FeedForward(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, dim, heads=8, dim_head=64, dropout=0., selfatt=True):
+    def __init__(self, dim, heads=8, dim_head=64, dropout=0., selfatt=True, kv_dim=None):
         super().__init__()
         inner_dim = dim_head * heads
         project_out = not (heads == 1 and dim_head == dim)
@@ -98,7 +98,7 @@ class Attention(nn.Module):
             self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
         else:
             self.to_q = nn.Linear(dim, inner_dim, bias=False)
-            self.to_kv = nn.Linear(768, inner_dim * 2, bias=False)
+            self.to_kv = nn.Linear(kv_dim, inner_dim * 2, bias=False)
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim),
@@ -125,13 +125,13 @@ class Attention(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0., selfatt=True):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0., selfatt=True, kv_dim=None):
         super().__init__()
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
                 PreNorm(dim, Attention(dim, heads=heads, dim_head=dim_head,
-                                       dropout=dropout, selfatt=selfatt)),
+                                       dropout=dropout, selfatt=selfatt, kv_dim=kv_dim)),
                 PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
             ]))
 
@@ -140,4 +140,66 @@ class Transformer(nn.Module):
             x = attn(x, z=z) + x
             x = ff(x) + x
         return x
+
+
+
+class SlotAttention(nn.Module):
+    """
+    Slot Attention as introduced by Locatello et al.
+    """
+    def __init__(self, num_slots, input_dim=768, slot_dim=1536, hidden_dim=3072, iters=3, eps=1e-8):
+        super().__init__()
+
+        self.num_slots = num_slots
+        self.iters = iters
+        self.scale = slot_dim ** -0.5
+        self.slot_dim = slot_dim
+        self.initial_slots = nn.Parameter(torch.randn(num_slots, slot_dim))
+        self.eps = eps
+
+        self.to_q = nn.Linear(slot_dim, slot_dim, bias=False)
+        self.to_k = nn.Linear(input_dim, slot_dim, bias=False)
+        self.to_v = nn.Linear(input_dim, slot_dim, bias=False)
+
+        self.gru = nn.GRUCell(slot_dim, slot_dim)
+
+        self.mlp = nn.Sequential(
+            nn.Linear(slot_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, slot_dim)
+        )
+
+        self.norm_input   = nn.LayerNorm(input_dim)
+        self.norm_slots   = nn.LayerNorm(slot_dim)
+        self.norm_pre_mlp = nn.LayerNorm(slot_dim)
+
+    def forward(self, inputs):
+        """
+        Args:
+            inputs: set-latent representation [batch_size, num_inputs, dim]
+        """
+        batch_size, num_inputs, dim = inputs.shape
+
+        inputs = self.norm_input(inputs)
+        slots = self.initial_slots.unsqueeze(0).expand(batch_size, -1, -1)
+
+        k, v = self.to_k(inputs), self.to_v(inputs)
+
+        for _ in range(self.iters):
+            slots_prev = slots
+            norm_slots = self.norm_slots(slots)
+
+            q = self.to_q(norm_slots)
+
+            dots = torch.einsum('bid,bjd->bij', q, k) * self.scale
+            attn = dots.softmax(dim=1) + self.eps
+            attn = attn / attn.sum(dim=-1, keepdim=True)
+            updates = torch.einsum('bjd,bij->bid', v, attn)
+
+            slots = self.gru(updates.flatten(0, 1), slots_prev.flatten(0, 1)) 
+            slots = slots.reshape(batch_size, self.num_slots, self.slot_dim)
+            slots = slots + self.mlp(self.norm_pre_mlp(slots))
+
+        return slots
+
 

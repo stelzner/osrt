@@ -7,12 +7,12 @@ import os, sys, argparse, math
 import yaml, json
 from tqdm import tqdm
 
-from srt.data import get_dataset
-from srt.checkpoint import Checkpoint
-from srt.utils.visualize import visualize_2d_cluster, get_clustering_colors
-from srt.utils.nerf import rotate_around_z_axis_torch, get_camera_rays, transform_points_torch, get_extrinsic_torch
-from srt.model import SRT
-from srt.trainer import SRTTrainer
+from osrt.data import get_dataset
+from osrt.checkpoint import Checkpoint
+from osrt.utils.visualize import visualize_2d_cluster, get_clustering_colors
+from osrt.utils.nerf import rotate_around_z_axis_torch, get_camera_rays, transform_points_torch, get_extrinsic_torch
+from osrt.model import SRT
+from osrt.trainer import SRTTrainer
 
 from compile_video import compile_video_render
 

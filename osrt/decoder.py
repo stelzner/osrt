@@ -2,21 +2,32 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from srt.layers import RayEncoder, Transformer, PositionalEncoding
-from srt.utils import nerf
+from osrt.layers import RayEncoder, Transformer, PositionalEncoding
+from osrt.utils import nerf
 
 
 class RayPredictor(nn.Module):
-    def __init__(self, num_att_blocks=2, pos_start_octave=0, out_dims=3):
+    def __init__(self, num_att_blocks=2, pos_start_octave=0, out_dims=3, input_mlp=None, output_mlp=None):
         super().__init__()
+        if input_mlp is not None:  # Input MLP added with OSRT
+            self.input_mlp = nn.Sequential(
+                nn.Linear(180, 360),
+                nn.ReLU(),
+                nn.Linear(360, 180))
+        else:
+            self.input_mlp = None
+
         self.query_encoder = RayEncoder(pos_octaves=15, pos_start_octave=pos_start_octave,
                                         ray_octaves=15)
-        self.transformer = Transformer(180, depth=num_att_blocks, heads=12, dim_head=64,
-                                       mlp_dim=1536, selfatt=False)
-        self.output_mlp = nn.Sequential(
-            nn.Linear(180, 128),
-            nn.ReLU(),
-            nn.Linear(128, out_dims))
+        self.transformer = Transformer(180, depth=num_att_blocks, heads=12, dim_head=128,
+                                       mlp_dim=3072, selfatt=False, kv_dim=1536)
+        if output_mlp is not None:
+            self.output_mlp = nn.Sequential(
+                nn.Linear(180, 128),
+                nn.ReLU(),
+                nn.Linear(128, out_dims))
+        else:
+            self.output_mlp = None
 
     def forward(self, z, x, rays):
         """
@@ -25,10 +36,14 @@ class RayPredictor(nn.Module):
             x: query camera positions [batch_size, num_rays, 3]
             rays: query ray directions [batch_size, num_rays, 3]
         """
-        queries = self.query_encoder(x, rays)
-        transformer_output = self.transformer(queries, z)
-        output = self.output_mlp(transformer_output)
-        return output
+        orig_queries = queries = self.query_encoder(x, rays)
+        if self.input_mlp is not None:
+            queries = self.input_mlp(queries)
+            
+        output = self.transformer(queries, z)
+        if self.output_mlp is not None:
+            output = self.output_mlp(output)
+        return output, orig_queries
 
 
 class SRTDecoder(nn.Module):
@@ -36,11 +51,91 @@ class SRTDecoder(nn.Module):
         super().__init__()
         self.ray_predictor = RayPredictor(num_att_blocks=num_att_blocks,
                                           pos_start_octave=pos_start_octave,
-                                          out_dims=3)
+                                          out_dims=3, output_mlp=True)
 
     def forward(self, z, x, rays, **kwargs):
-        output = self.ray_predictor(z, x, rays)
+        output, _ = self.ray_predictor(z, x, rays)
         return torch.sigmoid(output), dict()
+
+
+class MixingBlock(nn.Module):
+    def __init__(self, input_dim=180, slot_dim=1536, att_dim=1536):
+        super().__init__()
+        self.to_q = nn.Linear(input_dim, att_dim, bias=False)
+        self.to_k = nn.Linear(slot_dim, att_dim, bias=False)
+
+    def forward(self, x, slot_latents):
+        q = self.to_q(x)
+        k = self.to_k(slot_latents)
+
+        w = torch.einsum('bid,bsd->bis', q, k).softmax(dim=2)
+        s = (w.unsqueeze(-1) * slot_latents.unsqueeze(1)).sum(2)
+
+        return s, w
+
+
+class SlotMixerDecoder(nn.Module):
+    """ The Slot Mixer Decoder proposed in the OSRT paper. """
+    def __init__(self, num_att_blocks=2, pos_start_octave=0):
+        super().__init__()
+        self.allocation_transformer = RayPredictor(num_att_blocks=num_att_blocks,
+                                                   pos_start_octave=pos_start_octave,
+                                                   input_mlp=True)
+        self.mixing_block = MixingBlock()
+        self.render_mlp = nn.Sequential(
+            nn.Linear(1536 + 180, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 3),
+        )
+
+    def forward(self, slot_latents, camera_pos, rays, **kwargs):
+        x, query_rays = self.allocation_transformer(slot_latents, camera_pos, rays)
+        slot_mix, slot_weights = self.mixing_block(x, slot_latents)
+        pixels = self.render_mlp(torch.cat((slot_mix, query_rays), -1))
+        return pixels, {'segmentation': slot_weights}
+
+
+class SpatialBroadcastDecoder(nn.Module):
+    """ 
+    A decoder which independently decodes each slot into pixels and weights, and mixes them in the end.
+    This is referred to as Spatial Broadcast Decoder in the OSRT paper, even though the spatial broadcast
+    originally introduced to facilitate convolutional decoding in 2D isn't happening here.
+    """
+    def __init__(self, pos_start_octave=0):
+        super().__init__()
+        self.query_encoder = RayEncoder(pos_octaves=15, pos_start_octave=pos_start_octave,
+                                        ray_octaves=15)
+        self.render_mlp = nn.Sequential(
+            nn.Linear(1536 + 180, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 4),
+        )
+
+    def forward(self, slot_latent, camera_pos, rays, **kwargs):
+        num_slots = slot_latent.shape[1]
+        num_queries = rays.shape[1]
+        queries = self.query_encoder(camera_pos, rays)
+
+        queries_exp = queries.unsqueeze(2).expand(-1, -1, num_slots, -1)
+        slots_exp = slot_latent.unsqueeze(1).expand(-1, num_queries, -1, -1)
+        queries_with_slots = torch.cat((queries_exp, slots_exp), -1)
+
+        outputs = self.render_mlp(queries_with_slots)
+        logits = outputs[..., 0]
+        slot_pixels = outputs[..., 1:]
+
+        weights = logits.softmax(2)
+        pixels = (slot_pixels * weights.unsqueeze(-1)).sum(2)
+
+        return pixels, {'segmentation': weights}
 
 
 class NerfNet(nn.Module):

@@ -8,11 +8,11 @@ import argparse
 import time, datetime
 import yaml
 
-from srt import data
-from srt.model import SRT
-from srt.trainer import SRTTrainer
-from srt.checkpoint import Checkpoint
-from srt.utils.common import init_ddp
+from osrt import data
+from osrt.model import OSRT
+from osrt.trainer import SRTTrainer
+from osrt.checkpoint import Checkpoint
+from osrt.utils.common import init_ddp
 
 
 class LrScheduler():
@@ -128,12 +128,12 @@ if __name__ == '__main__':
     train_dataset.mode = 'train'
     print('Visualization data loaded.')
 
-    model = SRT(cfg['model']).to(device)
+    model = OSRT(cfg['model']).to(device)
     print('Model created.')
 
     if world_size > 1:
-        model.encoder = DistributedDataParallel(model.encoder, device_ids=[rank], output_device=rank)
-        model.decoder = DistributedDataParallel(model.decoder, device_ids=[rank], output_device=rank)
+        model.encoder = DistributedDataParallel(model.encoder, device_ids=[rank], output_device=rank, find_unused_parameters=False)
+        model.decoder = DistributedDataParallel(model.decoder, device_ids=[rank], output_device=rank, find_unused_parameters=False)
         encoder_module = model.encoder.module
         decoder_module = model.decoder.module
     else:

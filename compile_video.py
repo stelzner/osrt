@@ -8,7 +8,7 @@ from tqdm import tqdm
 import argparse, os, subprocess
 from os.path import join
 
-from srt.utils.visualize import setup_axis, background_image
+from osrt.utils.visualize import setup_axis, background_image
 
 def compile_video_plot(path, small=False, frames=False, num_frames=1000000000):
 

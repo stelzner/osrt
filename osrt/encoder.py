@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from srt.layers import RayEncoder, Transformer
+from osrt.layers import RayEncoder, Transformer, SlotAttention
 
 
 class SRTConvBlock(nn.Module):
@@ -24,7 +24,10 @@ class SRTConvBlock(nn.Module):
         return self.layers(x)
 
 
-class SRTEncoder(nn.Module):
+class TweakedSRTEncoder(nn.Module):
+    """
+    Scene Representation Transformer Encoder with the tweaks from Appendix A.4 in the OSRT paper.
+    """
     def __init__(self, num_conv_blocks=4, num_att_blocks=10, pos_start_octave=0):
         super().__init__()
         self.ray_encoder = RayEncoder(pos_octaves=15, pos_start_octave=pos_start_octave,
@@ -44,11 +47,7 @@ class SRTEncoder(nn.Module):
             conv_blocks.append(SRTConvBlock(idim=cur_hdim, odim=output_dim))
         self.conv_blocks = nn.Sequential(*conv_blocks)
 
-        self.per_patch_linear = nn.Conv2d(1536, 768, kernel_size=1)
-
-        self.pixel_embedding = nn.Parameter(torch.randn(1, 768, 15, 20))
-        self.canonical_camera_embedding = nn.Parameter(torch.randn(1, 1, 768))
-        self.non_canonical_camera_embedding = nn.Parameter(torch.randn(1, 1, 768))
+        self.per_patch_linear = nn.Conv2d(768, 768, kernel_size=1)
 
         self.transformer = Transformer(768, depth=num_att_blocks, heads=12, dim_head=64,
                                        mlp_dim=1536, selfatt=True)
@@ -69,20 +68,11 @@ class SRTEncoder(nn.Module):
         camera_pos = camera_pos.flatten(0, 1)
         rays = rays.flatten(0, 1)
 
-        canonical_idxs = torch.zeros(batch_size, num_images)
-        canonical_idxs[:, 0] = 1
-        canonical_idxs = canonical_idxs.flatten(0, 1).unsqueeze(-1).unsqueeze(-1).to(x)
-        camera_id_embedding = canonical_idxs * self.canonical_camera_embedding + \
-                (1. - canonical_idxs) * self.non_canonical_camera_embedding
-
         ray_enc = self.ray_encoder(camera_pos, rays)
         x = torch.cat((x, ray_enc), 1)
         x = self.conv_blocks(x)
         x = self.per_patch_linear(x)
-        height, width = x.shape[2:]
-        x = x + self.pixel_embedding[:, :, :height, :width]
         x = x.flatten(2, 3).permute(0, 2, 1)
-        x = x + camera_id_embedding
 
         patches_per_image, channels_per_patch = x.shape[1:]
         x = x.reshape(batch_size, num_images * patches_per_image, channels_per_patch)
@@ -90,4 +80,19 @@ class SRTEncoder(nn.Module):
         x = self.transformer(x)
 
         return x
+
+
+class OSRTEncoder(nn.Module):
+    def __init__(self, pos_start_octave=0, num_slots=6, slot_dim=1536, slot_iters=1):
+        super().__init__()
+        self.srt_encoder = TweakedSRTEncoder(num_conv_blocks=3, num_att_blocks=5,
+                                             pos_start_octave=pos_start_octave)
+
+        self.slot_attention = SlotAttention(num_slots, slot_dim=slot_dim, iters=slot_iters)
+
+    def forward(self, images, camera_pos, rays):
+        set_latents = self.srt_encoder(images, camera_pos, rays)
+        slot_latents = self.slot_attention(set_latents)
+        return slot_latents
+
 
