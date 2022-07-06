@@ -192,8 +192,15 @@ if __name__ == '__main__':
 
     num_encoder_params = sum(p.numel() for p in model.encoder.parameters())
     num_decoder_params = sum(p.numel() for p in model.decoder.parameters())
+    num_srt_encoder_params = sum(p.numel() for p in model.encoder.module.srt_encoder.parameters())
+    num_slotatt_params = sum(p.numel() for p in model.encoder.module.slot_attention.parameters())
+
     print('Number of parameters:')
-    print(f'Encoder: {num_encoder_params}, Decoder: {num_decoder_params}, Total: {num_encoder_params + num_decoder_params}')
+    print(f'\tEncoder: {num_encoder_params}')
+    print(f'\t\tSRT Encoder: {num_srt_encoder_params}.')
+    print(f'\t\tSlot Attention: {num_slotatt_params}.')
+    print(f'\tDecoder: {num_decoder_params}')
+    print(f'Total: {num_encoder_params + num_decoder_params}')
 
     if args.rtpt is not None:
         rtpt.start()
