@@ -66,6 +66,7 @@ class PreNorm(nn.Module):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.fn = fn
+
     def forward(self, x, **kwargs):
         return self.fn(self.norm(x), **kwargs)
 

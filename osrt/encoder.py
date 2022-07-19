@@ -28,7 +28,7 @@ class TweakedSRTEncoder(nn.Module):
     """
     Scene Representation Transformer Encoder with the tweaks from Appendix A.4 in the OSRT paper.
     """
-    def __init__(self, num_conv_blocks=4, num_att_blocks=10, pos_start_octave=0):
+    def __init__(self, num_conv_blocks=3, num_att_blocks=5, pos_start_octave=0):
         super().__init__()
         self.ray_encoder = RayEncoder(pos_octaves=15, pos_start_octave=pos_start_octave,
                                       ray_octaves=15)

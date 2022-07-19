@@ -200,6 +200,7 @@ class SRTTrainer:
                 columns.append((f'render {angle_deg}°', img.cpu().numpy(), 'image'))
 
             for i, extras in enumerate(all_extras):
+                angle_deg = (i * 360) // num_angles
                 if 'depth' in extras:
                     depth_img = extras['depth'].unsqueeze(-1) / self.render_kwargs['max_dist']
                     depth_img = depth_img.view(batch_size, height, width, 1)

@@ -1,13 +1,21 @@
 from torch import nn
 
-from osrt.encoder import OSRTEncoder
+from osrt.encoder import OSRTEncoder, TweakedSRTEncoder
 from osrt.decoder import SlotMixerDecoder, SpatialBroadcastDecoder, SRTDecoder
 
 class OSRT(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        self.encoder = OSRTEncoder(**cfg['encoder_kwargs'])
+        encoder_type = cfg['encoder']
         decoder_type = cfg['decoder']
+
+        if encoder_type == 'srt':
+            self.encoder = TweakedSRTEncoder(**cfg['encoder_kwargs'])
+        elif encoder_type == 'osrt':
+            self.encoder = OSRTEncoder(**cfg['encoder_kwargs'])
+        else:
+            raise ValueError(f'Unknown encoder type: {encoder_type}')
+
 
         if decoder_type == 'spatial_broadcast':
             self.decoder = SpatialBroadcastDecoder(**cfg['decoder_kwargs'])
