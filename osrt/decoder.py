@@ -25,19 +25,9 @@ class RayPredictor(nn.Module):
                                        mlp_dim=z_dim * 2, selfatt=False, kv_dim=z_dim)
         if output_mlp is not None:
             self.output_mlp = nn.Sequential(
-                nn.Linear(180, 1536),
+                nn.Linear(180, 128),
                 nn.ReLU(),
-                nn.Linear(1536, 1536),
-                nn.ReLU(),
-                nn.Linear(1536, 1536),
-                nn.ReLU(),
-                nn.Linear(1536, 3),
-            )
-
-            #self.output_mlp = nn.Sequential(
-                #nn.Linear(180, 128),
-                #nn.ReLU(),
-                #nn.Linear(128, out_dims))
+                nn.Linear(128, out_dims))
         else:
             self.output_mlp = None
 
@@ -109,6 +99,8 @@ class SlotMixerDecoder(nn.Module):
             nn.ReLU(),
             nn.Linear(1536, 1536),
             nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
             nn.Linear(1536, 3),
         )
 
@@ -117,6 +109,31 @@ class SlotMixerDecoder(nn.Module):
         slot_mix, slot_weights = self.mixing_block(x, slot_latents)
         pixels = self.render_mlp(torch.cat((slot_mix, query_rays), -1))
         return pixels, {'segmentation': slot_weights}
+
+
+class TweakedSRTDecoder(nn.Module):
+    """ The Slot Mixer Decoder proposed in the OSRT paper. """
+    def __init__(self, num_att_blocks=2, pos_start_octave=0):
+        super().__init__()
+        self.allocation_transformer = RayPredictor(num_att_blocks=num_att_blocks,
+                                                   pos_start_octave=pos_start_octave,
+                                                   input_mlp=True, z_dim=768)
+        self.render_mlp = nn.Sequential(
+            nn.Linear(180, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 1536),
+            nn.ReLU(),
+            nn.Linear(1536, 3),
+        )
+
+    def forward(self, set_latents, camera_pos, rays, **kwargs):
+        x, _ = self.allocation_transformer(set_latents, camera_pos, rays)
+        pixels = self.render_mlp(x)
+        return pixels, {}
 
 
 class SpatialBroadcastDecoder(nn.Module):

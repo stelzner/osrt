@@ -1,7 +1,7 @@
 from torch import nn
 
 from osrt.encoder import OSRTEncoder, TweakedSRTEncoder
-from osrt.decoder import SlotMixerDecoder, SpatialBroadcastDecoder, SRTDecoder
+from osrt.decoder import SlotMixerDecoder, SpatialBroadcastDecoder, TweakedSRTDecoder
 
 class OSRT(nn.Module):
     def __init__(self, cfg):
@@ -20,7 +20,7 @@ class OSRT(nn.Module):
         if decoder_type == 'spatial_broadcast':
             self.decoder = SpatialBroadcastDecoder(**cfg['decoder_kwargs'])
         elif decoder_type == 'srt':
-            self.decoder = SRTDecoder(**cfg['decoder_kwargs'])
+            self.decoder = TweakedSRTDecoder(**cfg['decoder_kwargs'])
         elif decoder_type == 'slot_mixer':
             self.decoder = SlotMixerDecoder(**cfg['decoder_kwargs'])
         else:

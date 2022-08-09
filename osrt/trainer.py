@@ -182,7 +182,6 @@ class SRTTrainer:
                 header = 'input' if num_input_images == 1 else f'input {i+1}'
                 columns.append((header, input_images_np[:, i], 'image'))
 
-            all_extras = []
             for i in range(num_angles):
                 angle = i * (2 * math.pi / num_angles)
                 angle_deg = (i * 360) // num_angles
@@ -196,11 +195,8 @@ class SRTTrainer:
                         rays_rot, transform.unsqueeze(1).unsqueeze(2), translate=False)
 
                 img, extras = self.render_image(z, camera_pos_rot, rays_rot, **self.render_kwargs)
-                all_extras.append(extras)
                 columns.append((f'render {angle_deg}°', img.cpu().numpy(), 'image'))
 
-            for i, extras in enumerate(all_extras):
-                angle_deg = (i * 360) // num_angles
                 if 'depth' in extras:
                     depth_img = extras['depth'].unsqueeze(-1) / self.render_kwargs['max_dist']
                     depth_img = depth_img.view(batch_size, height, width, 1)
