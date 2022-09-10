@@ -182,6 +182,11 @@ class SRTTrainer:
                 header = 'input' if num_input_images == 1 else f'input {i+1}'
                 columns.append((header, input_images_np[:, i], 'image'))
 
+            if 'input_masks' in data:
+                input_mask = data['input_masks'][:, 0]
+                columns.append(('true seg 0°', input_mask.argmax(-1), 'clustering'))
+
+            row_labels = None
             for i in range(num_angles):
                 angle = i * (2 * math.pi / num_angles)
                 angle_deg = (i * 360) // num_angles
@@ -203,8 +208,14 @@ class SRTTrainer:
                     columns.append((f'depths {angle_deg}°', depth_img.cpu().numpy(), 'image'))
 
                 if 'segmentation' in extras:
-                    columns.append((f'pred seg {angle_deg}°', extras['segmentation'].argmax(-1).cpu().numpy(), 'clustering'))
+                    pred_seg = extras['segmentation'].cpu()
+                    columns.append((f'pred seg {angle_deg}°', pred_seg.argmax(-1).numpy(), 'clustering'))
+                    if i == 0:
+                        ari = compute_adjusted_rand_index(
+                            input_mask.flatten(1, 2).transpose(1, 2)[:, 1:],
+                            pred_seg.flatten(1, 2).transpose(1, 2))
+                        row_labels = ['{:.1f}'.format(x.item()) for x in ari]
 
             output_img_path = os.path.join(self.out_dir, f'renders-{mode}')
-            vis.draw_visualization_grid(columns, output_img_path)
+            vis.draw_visualization_grid(columns, output_img_path, row_labels=row_labels)
 

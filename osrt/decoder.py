@@ -61,37 +61,41 @@ class SRTDecoder(nn.Module):
 
 
 class MixingBlock(nn.Module):
-    def __init__(self, input_dim=180, slot_dim=1536, att_dim=1536):
+    def __init__(self, input_dim=180, slot_dim=1536, att_dim=1536, layer_norm=False):
         super().__init__()
         self.to_q = nn.Linear(input_dim, att_dim, bias=False)
         self.to_k = nn.Linear(slot_dim, att_dim, bias=False)
-        self.norm1 = nn.LayerNorm(input_dim)
-        self.norm2 = nn.LayerNorm(slot_dim)
+        if layer_norm:
+            self.norm1 = nn.LayerNorm(input_dim)
+            self.norm2 = nn.LayerNorm(slot_dim)
 
         self.scale = att_dim ** -0.5
+        self.layer_norm = layer_norm
 
     def forward(self, x, slot_latents):
-        x = self.norm1(x)
+        if self.layer_norm:
+            x = self.norm1(x)
         q = self.to_q(x)
         k = self.to_k(slot_latents)
 
         dots = torch.einsum('bid,bsd->bis', q, k) * self.scale
         w = dots.softmax(dim=2)
         s = (w.unsqueeze(-1) * slot_latents.unsqueeze(1)).sum(2)
-
-        s = self.norm2(s)
+       
+        if self.layer_norm:
+            s = self.norm2(s)
 
         return s, w
 
 
 class SlotMixerDecoder(nn.Module):
     """ The Slot Mixer Decoder proposed in the OSRT paper. """
-    def __init__(self, num_att_blocks=2, pos_start_octave=0):
+    def __init__(self, num_att_blocks=2, pos_start_octave=0, layer_norm=False):
         super().__init__()
         self.allocation_transformer = RayPredictor(num_att_blocks=num_att_blocks,
                                                    pos_start_octave=pos_start_octave,
                                                    input_mlp=True, z_dim=1536)
-        self.mixing_block = MixingBlock()
+        self.mixing_block = MixingBlock(layer_norm=layer_norm)
         self.render_mlp = nn.Sequential(
             nn.Linear(1536 + 180, 1536),
             nn.ReLU(),
