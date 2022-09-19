@@ -116,7 +116,7 @@ class SlotMixerDecoder(nn.Module):
 
 
 class TweakedSRTDecoder(nn.Module):
-    """ The Slot Mixer Decoder proposed in the OSRT paper. """
+    """ The new, improved SRT decoder proposed in the OSRT paper. """
     def __init__(self, num_att_blocks=2, pos_start_octave=0):
         super().__init__()
         self.allocation_transformer = RayPredictor(num_att_blocks=num_att_blocks,

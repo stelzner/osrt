@@ -214,7 +214,7 @@ class SRTTrainer:
                         ari = compute_adjusted_rand_index(
                             input_mask.flatten(1, 2).transpose(1, 2)[:, 1:],
                             pred_seg.flatten(1, 2).transpose(1, 2))
-                        row_labels = ['{:.1f}'.format(x.item()) for x in ari]
+                        row_labels = ['2D Fg-ARI={:.1f}'.format(x.item() * 100) for x in ari]
 
             output_img_path = os.path.join(self.out_dir, f'renders-{mode}')
             vis.draw_visualization_grid(columns, output_img_path, row_labels=row_labels)
