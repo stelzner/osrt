@@ -119,6 +119,10 @@ class Clevr3dDataset(Dataset):
         input_rays = downsample(input_rays, num_steps=self.downsample)
         input_rays = np.expand_dims(input_rays, 0)
 
+        input_masks = masks[view_idx]
+        input_masks = downsample(input_masks, num_steps=self.downsample)
+        input_masks = np.expand_dims(input_masks, 0)
+
         input_camera_pos = np.expand_dims(input_camera_pos, 0)
 
         all_pixels = np.reshape(np.stack(imgs, 0), (self.num_views * 240 * 320, 3))
@@ -150,6 +154,7 @@ class Clevr3dDataset(Dataset):
             'input_images':         input_images,         # [1, 3, h, w]
             'input_camera_pos':     input_camera_pos,     # [1, 3]
             'input_rays':           input_rays,           # [1, h, w, 3]
+            'input_masks':          input_masks,          # [1, h, w, self.max_num_entities]
             'target_pixels':        target_pixels,        # [p, 3]
             'target_camera_pos':    target_camera_pos,    # [p, 3]
             'target_rays':          target_rays,          # [p, 3]
