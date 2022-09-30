@@ -148,14 +148,17 @@ class SlotAttention(nn.Module):
     """
     Slot Attention as introduced by Locatello et al.
     """
-    def __init__(self, num_slots, input_dim=768, slot_dim=1536, hidden_dim=3072, iters=3, eps=1e-8):
+    def __init__(self, num_slots, input_dim=768, slot_dim=1536, hidden_dim=3072, iters=3, eps=1e-8, scale_embeddings=True):
         super().__init__()
 
         self.num_slots = num_slots
         self.iters = iters
         self.scale = slot_dim ** -0.5
         self.slot_dim = slot_dim
-        self.initial_slots = nn.Parameter(torch.randn(num_slots, slot_dim))
+
+        embedding_stdev = (1./math.sqrt(slot_dim)) if scale_embeddings else 1.
+        self.initial_slots = nn.Parameter(torch.randn(num_slots, slot_dim) * embedding_stdev)
+
         self.eps = eps
 
         self.to_q = nn.Linear(slot_dim, slot_dim, bias=False)
