@@ -1,9 +1,36 @@
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 import numpy as np
 
 import math
 from einops import rearrange
+
+
+class SRTLinear(nn.Linear):
+    """ Initialization for linear layers used in the SRT decoder """
+    def reset_parameters(self):
+        init.xavier_uniform_(self.weight)
+        if self.bias is not None:
+            init.zeros_(self.bias)
+
+
+class ViTLinear(nn.Linear):
+    """ Initialization for linear layers used by ViT """
+    def reset_parameters(self):
+        init.xavier_uniform_(self.weight)
+        if self.bias is not None:
+            init.normal_(self.bias, std=1e-6)
+
+
+class JaxLinear(nn.Linear):
+    """ Linear layers with initialization matching the Jax defaults """
+    def reset_parameters(self):
+        input_size = self.weight.shape[-1]
+        std = math.sqrt(1/input_size)
+        init.trunc_normal_(self.weight, std=std, a=-2.*std, b=2.*std)
+        if self.bias is not None:
+            init.zeros_(self.bias)
 
 
 class PositionalEncoding(nn.Module):
@@ -75,10 +102,10 @@ class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
+            ViTLinear(dim, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
+            ViTLinear(hidden_dim, dim),
             nn.Dropout(dropout)
         )
     def forward(self, x):
@@ -96,13 +123,13 @@ class Attention(nn.Module):
 
         self.attend = nn.Softmax(dim=-1)
         if selfatt:
-            self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
+            self.to_qkv = JaxLinear(dim, inner_dim * 3, bias=False)
         else:
-            self.to_q = nn.Linear(dim, inner_dim, bias=False)
-            self.to_kv = nn.Linear(kv_dim, inner_dim * 2, bias=False)
+            self.to_q = JaxLinear(dim, inner_dim, bias=False)
+            self.to_kv = JaxLinear(kv_dim, inner_dim * 2, bias=False)
 
         self.to_out = nn.Sequential(
-            nn.Linear(inner_dim, dim),
+            JaxLinear(inner_dim, dim),
             nn.Dropout(dropout)
         ) if project_out else nn.Identity()
 
@@ -148,7 +175,8 @@ class SlotAttention(nn.Module):
     """
     Slot Attention as introduced by Locatello et al.
     """
-    def __init__(self, num_slots, input_dim=768, slot_dim=1536, hidden_dim=3072, iters=3, eps=1e-8, scale_embeddings=True):
+    def __init__(self, num_slots, input_dim=768, slot_dim=1536, hidden_dim=3072, iters=3, eps=1e-8,
+                 randomize_initial_slots=False):
         super().__init__()
 
         self.num_slots = num_slots
@@ -156,21 +184,21 @@ class SlotAttention(nn.Module):
         self.scale = slot_dim ** -0.5
         self.slot_dim = slot_dim
 
-        embedding_stdev = (1./math.sqrt(slot_dim)) if scale_embeddings else 1.
-        self.initial_slots = nn.Parameter(torch.randn(num_slots, slot_dim) * embedding_stdev)
+        self.randomize_initial_slots = randomize_initial_slots
+        self.initial_slots = nn.Parameter(torch.randn(num_slots, slot_dim))
 
         self.eps = eps
 
-        self.to_q = nn.Linear(slot_dim, slot_dim, bias=False)
-        self.to_k = nn.Linear(input_dim, slot_dim, bias=False)
-        self.to_v = nn.Linear(input_dim, slot_dim, bias=False)
+        self.to_q = JaxLinear(slot_dim, slot_dim, bias=False)
+        self.to_k = JaxLinear(input_dim, slot_dim, bias=False)
+        self.to_v = JaxLinear(input_dim, slot_dim, bias=False)
 
         self.gru = nn.GRUCell(slot_dim, slot_dim)
 
         self.mlp = nn.Sequential(
-            nn.Linear(slot_dim, hidden_dim),
+            JaxLinear(slot_dim, hidden_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(hidden_dim, slot_dim)
+            JaxLinear(hidden_dim, slot_dim)
         )
 
         self.norm_input   = nn.LayerNorm(input_dim)
@@ -185,7 +213,11 @@ class SlotAttention(nn.Module):
         batch_size, num_inputs, dim = inputs.shape
 
         inputs = self.norm_input(inputs)
-        slots = self.initial_slots.unsqueeze(0).expand(batch_size, -1, -1)
+        if self.randomize_initial_slots:
+            slot_means = self.initial_slots.unsqueeze(0).expand(batch_size, -1, -1)
+            slots = torch.distributions.Normal(slot_means, self.embedding_stdev).rsample()
+        else:
+            slots = self.initial_slots.unsqueeze(0).expand(batch_size, -1, -1)
 
         k, v = self.to_k(inputs), self.to_v(inputs)
 
@@ -196,11 +228,12 @@ class SlotAttention(nn.Module):
             q = self.to_q(norm_slots)
 
             dots = torch.einsum('bid,bjd->bij', q, k) * self.scale
+            # shape: [batch_size, num_slots, num_inputs]
             attn = dots.softmax(dim=1) + self.eps
             attn = attn / attn.sum(dim=-1, keepdim=True)
             updates = torch.einsum('bjd,bij->bid', v, attn)
 
-            slots = self.gru(updates.flatten(0, 1), slots_prev.flatten(0, 1)) 
+            slots = self.gru(updates.flatten(0, 1), slots_prev.flatten(0, 1))
             slots = slots.reshape(batch_size, self.num_slots, self.slot_dim)
             slots = slots + self.mlp(self.norm_pre_mlp(slots))
 

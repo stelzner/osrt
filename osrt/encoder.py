@@ -19,14 +19,14 @@ class SRTConvBlock(nn.Module):
             nn.ReLU(),
             nn.Conv2d(hdim, odim, stride=2, **conv_kwargs),
             nn.ReLU())
-    
+
     def forward(self, x):
         return self.layers(x)
 
 
-class TweakedSRTEncoder(nn.Module):
+class ImprovedSRTEncoder(nn.Module):
     """
-    Scene Representation Transformer Encoder with the tweaks from Appendix A.4 in the OSRT paper.
+    Scene Representation Transformer Encoder with the improvements from Appendix A.4 in the OSRT paper.
     """
     def __init__(self, num_conv_blocks=3, num_att_blocks=5, pos_start_octave=0):
         super().__init__()
@@ -34,20 +34,14 @@ class TweakedSRTEncoder(nn.Module):
                                       ray_octaves=15)
 
         conv_blocks = [SRTConvBlock(idim=183, hdim=96)]
-        cur_hdim = 96
+        cur_hdim = 192
         for i in range(1, num_conv_blocks):
-            if cur_hdim < 1536:
-                cur_hdim *= 2
+            conv_blocks.append(SRTConvBlock(idim=cur_hdim, odim=None))
+            cur_hdim *= 2
 
-            if cur_hdim < 1536:
-                output_dim = None
-            else:
-                output_dim = cur_hdim
-
-            conv_blocks.append(SRTConvBlock(idim=cur_hdim, odim=output_dim))
         self.conv_blocks = nn.Sequential(*conv_blocks)
 
-        self.per_patch_linear = nn.Conv2d(768, 768, kernel_size=1)
+        self.per_patch_linear = nn.Conv2d(cur_hdim, 768, kernel_size=1)
 
         self.transformer = Transformer(768, depth=num_att_blocks, heads=12, dim_head=64,
                                        mlp_dim=1536, selfatt=True)
@@ -83,12 +77,14 @@ class TweakedSRTEncoder(nn.Module):
 
 
 class OSRTEncoder(nn.Module):
-    def __init__(self, pos_start_octave=0, num_slots=6, slot_dim=1536, slot_iters=1):
+    def __init__(self, pos_start_octave=0, num_slots=6, slot_dim=1536, slot_iters=1,
+                 randomize_initial_slots=False):
         super().__init__()
-        self.srt_encoder = TweakedSRTEncoder(num_conv_blocks=3, num_att_blocks=5,
+        self.srt_encoder = ImprovedSRTEncoder(num_conv_blocks=3, num_att_blocks=5,
                                              pos_start_octave=pos_start_octave)
 
-        self.slot_attention = SlotAttention(num_slots, slot_dim=slot_dim, iters=slot_iters)
+        self.slot_attention = SlotAttention(num_slots, slot_dim=slot_dim, iters=slot_iters,
+                                            randomize_initial_slots=randomize_initial_slots)
 
     def forward(self, images, camera_pos, rays):
         set_latents = self.srt_encoder(images, camera_pos, rays)

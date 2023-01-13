@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from osrt.layers import RayEncoder, Transformer, PositionalEncoding
+from osrt.layers import RayEncoder, Transformer, PositionalEncoding, SRTLinear
 from osrt.utils import nerf
 
 
@@ -12,9 +12,9 @@ class RayPredictor(nn.Module):
         super().__init__()
         if input_mlp is not None:  # Input MLP added with OSRT
             self.input_mlp = nn.Sequential(
-                nn.Linear(180, 360),
+                SRTLinear(180, 360),
                 nn.ReLU(),
-                nn.Linear(360, 180))
+                SRTLinear(360, 180))
         else:
             self.input_mlp = None
 
@@ -25,9 +25,9 @@ class RayPredictor(nn.Module):
                                        mlp_dim=z_dim * 2, selfatt=False, kv_dim=z_dim)
         if output_mlp is not None:
             self.output_mlp = nn.Sequential(
-                nn.Linear(180, 128),
+                SRTLinear(180, 128),
                 nn.ReLU(),
-                nn.Linear(128, out_dims))
+                SRTLinear(128, out_dims))
         else:
             self.output_mlp = None
 
@@ -41,7 +41,7 @@ class RayPredictor(nn.Module):
         queries = self.query_encoder(x, rays)
         if self.input_mlp is not None:
             queries = self.input_mlp(queries)
-            
+
         output = self.transformer(queries, z)
         if self.output_mlp is not None:
             output = self.output_mlp(output)
@@ -63,8 +63,8 @@ class SRTDecoder(nn.Module):
 class MixingBlock(nn.Module):
     def __init__(self, input_dim=180, slot_dim=1536, att_dim=1536, layer_norm=False):
         super().__init__()
-        self.to_q = nn.Linear(input_dim, att_dim, bias=False)
-        self.to_k = nn.Linear(slot_dim, att_dim, bias=False)
+        self.to_q = SRTLinear(input_dim, att_dim, bias=False)
+        self.to_k = SRTLinear(slot_dim, att_dim, bias=False)
         if layer_norm:
             self.norm1 = nn.LayerNorm(input_dim)
             self.norm2 = nn.LayerNorm(slot_dim)
@@ -73,15 +73,22 @@ class MixingBlock(nn.Module):
         self.layer_norm = layer_norm
 
     def forward(self, x, slot_latents):
+        """
+        Args:
+            x: query ray features [batch_size, num_rays, input_dim]
+            slot_latents: slot scene representation [batch_size, num_slots, slot_dim]
+        """
         if self.layer_norm:
             x = self.norm1(x)
         q = self.to_q(x)
         k = self.to_k(slot_latents)
 
         dots = torch.einsum('bid,bsd->bis', q, k) * self.scale
-        w = dots.softmax(dim=2)
+        w = dots.softmax(dim=2)  # [batch_size, num_rays, num_slots]
+
+        # [batch_size, num_rays, num_slots, 1] * [batch_size, 1, num_slots, slot_dim]
         s = (w.unsqueeze(-1) * slot_latents.unsqueeze(1)).sum(2)
-       
+
         if self.layer_norm:
             s = self.norm2(s)
 
@@ -97,15 +104,15 @@ class SlotMixerDecoder(nn.Module):
                                                    input_mlp=True, z_dim=1536)
         self.mixing_block = MixingBlock(layer_norm=layer_norm)
         self.render_mlp = nn.Sequential(
-            nn.Linear(1536 + 180, 1536),
+            SRTLinear(1536 + 180, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 3),
+            SRTLinear(1536, 3),
         )
 
     def forward(self, slot_latents, camera_pos, rays, **kwargs):
@@ -115,7 +122,7 @@ class SlotMixerDecoder(nn.Module):
         return pixels, {'segmentation': slot_weights}
 
 
-class TweakedSRTDecoder(nn.Module):
+class ImprovedSRTDecoder(nn.Module):
     """ The new, improved SRT decoder proposed in the OSRT paper. """
     def __init__(self, num_att_blocks=2, pos_start_octave=0):
         super().__init__()
@@ -123,15 +130,15 @@ class TweakedSRTDecoder(nn.Module):
                                                    pos_start_octave=pos_start_octave,
                                                    input_mlp=True, z_dim=768)
         self.render_mlp = nn.Sequential(
-            nn.Linear(180, 1536),
+            SRTLinear(180, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 3),
+            SRTLinear(1536, 3),
         )
 
     def forward(self, set_latents, camera_pos, rays, **kwargs):
@@ -141,7 +148,7 @@ class TweakedSRTDecoder(nn.Module):
 
 
 class SpatialBroadcastDecoder(nn.Module):
-    """ 
+    """
     A decoder which independently decodes each slot into pixels and weights, and mixes them in the end.
     This is referred to as Spatial Broadcast Decoder in the OSRT paper, even though the spatial broadcast
     originally introduced to facilitate convolutional decoding in 2D isn't happening here.
@@ -151,13 +158,13 @@ class SpatialBroadcastDecoder(nn.Module):
         self.query_encoder = RayEncoder(pos_octaves=15, pos_start_octave=pos_start_octave,
                                         ray_octaves=15)
         self.render_mlp = nn.Sequential(
-            nn.Linear(1536 + 180, 1536),
+            SRTLinear(1536 + 180, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 1536),
+            SRTLinear(1536, 1536),
             nn.ReLU(),
-            nn.Linear(1536, 4),
+            SRTLinear(1536, 4),
         )
 
     def forward(self, slot_latent, camera_pos, rays, **kwargs):
@@ -189,9 +196,9 @@ class NerfNet(nn.Module):
                                        mlp_dim=1536, selfatt=False)
 
         self.color_predictor = nn.Sequential(
-            nn.Linear(179, 256),
+            SRTLinear(179, 256),
             nn.ReLU(),
-            nn.Linear(256, 3),
+            SRTLinear(256, 3),
             nn.Sigmoid())
 
         self.max_density = max_density

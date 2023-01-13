@@ -152,7 +152,7 @@ class SRTTrainer:
             input_images = data.get('input_images').to(device)
             input_camera_pos = data.get('input_camera_pos').to(device)
             input_rays = data.get('input_rays').to(device)
-            
+
             camera_pos_base = input_camera_pos[:, 0]
             input_rays_base = input_rays[:, 0]
 
@@ -160,7 +160,7 @@ class SRTTrainer:
                 # If the data is transformed in some different coordinate system, where
                 # rotating around the z axis doesn't make sense, we first undo this transform,
                 # then rotate, and then reapply it.
-                
+
                 transform = data['transform'].to(device)
                 inv_transform = torch.inverse(transform)
                 camera_pos_base = nerf.transform_points_torch(camera_pos_base, inv_transform)

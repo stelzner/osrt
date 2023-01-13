@@ -12,7 +12,6 @@ model:
   decoder: slot_mixer
   decoder_kwargs:
     pos_start_octave: -5
-
 training:
   num_workers: 8
   batch_size: 128
