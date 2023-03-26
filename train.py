@@ -63,7 +63,7 @@ if __name__ == '__main__':
         max_it = 1000000
 
     exp_name = os.path.basename(os.path.dirname(args.config))
-    
+
     if args.rtpt is not None:
         from rtpt import RTPT
         rtpt = RTPT(name_initials=args.rtpt, experiment_name=exp_name, max_iterations=max_it)
@@ -111,7 +111,7 @@ if __name__ == '__main__':
         worker_init_fn=data.worker_init_fn, persistent_workers=True)
 
     val_loader = torch.utils.data.DataLoader(
-        eval_dataset, batch_size=max(1, batch_size // 8), num_workers=1, 
+        eval_dataset, batch_size=max(1, batch_size // 8), num_workers=1,
         sampler=val_sampler, shuffle=shuffle,
         pin_memory=False, worker_init_fn=data.worker_init_fn, persistent_workers=True)
 

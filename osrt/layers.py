@@ -7,30 +7,42 @@ import math
 from einops import rearrange
 
 
-class SRTLinear(nn.Linear):
-    """ Initialization for linear layers used in the SRT decoder """
-    def reset_parameters(self):
-        init.xavier_uniform_(self.weight)
-        if self.bias is not None:
-            init.zeros_(self.bias)
-
-
-class ViTLinear(nn.Linear):
-    """ Initialization for linear layers used by ViT """
-    def reset_parameters(self):
-        init.xavier_uniform_(self.weight)
-        if self.bias is not None:
-            init.normal_(self.bias, std=1e-6)
+__USE_DEFAULT_INIT__ = False
 
 
 class JaxLinear(nn.Linear):
     """ Linear layers with initialization matching the Jax defaults """
     def reset_parameters(self):
-        input_size = self.weight.shape[-1]
-        std = math.sqrt(1/input_size)
-        init.trunc_normal_(self.weight, std=std, a=-2.*std, b=2.*std)
-        if self.bias is not None:
-            init.zeros_(self.bias)
+        if __USE_DEFAULT_INIT__:
+            super().reset_parameters()
+        else:
+            input_size = self.weight.shape[-1]
+            std = math.sqrt(1/input_size)
+            init.trunc_normal_(self.weight, std=std, a=-2.*std, b=2.*std)
+            if self.bias is not None:
+                init.zeros_(self.bias)
+
+
+class ViTLinear(nn.Linear):
+    """ Initialization for linear layers used by ViT """
+    def reset_parameters(self):
+        if __USE_DEFAULT_INIT__:
+            super().reset_parameters()
+        else:
+            init.xavier_uniform_(self.weight)
+            if self.bias is not None:
+                init.normal_(self.bias, std=1e-6)
+
+
+class SRTLinear(nn.Linear):
+    """ Initialization for linear layers used in the SRT decoder """
+    def reset_parameters(self):
+        if __USE_DEFAULT_INIT__:
+            super().reset_parameters()
+        else:
+            init.xavier_uniform_(self.weight)
+            if self.bias is not None:
+                init.zeros_(self.bias)
 
 
 class PositionalEncoding(nn.Module):

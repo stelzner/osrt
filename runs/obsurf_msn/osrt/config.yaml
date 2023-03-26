@@ -1,20 +1,22 @@
 
 data:
-  dataset: clevr3d
-  num_points: 2048
+  dataset: obsurf_msn
+  num_points: 6144
+  path: 'data/multishapenet'
   kwargs:
     downsample: 1
 model:
   encoder: osrt
   encoder_kwargs:
     pos_start_octave: -5
-    num_slots: 7
+    num_slots: 5
   decoder: slot_mixer
   decoder_kwargs:
     pos_start_octave: -5
+
 training:
   num_workers: 8
-  batch_size: 256
+  batch_size: 128
   model_selection_metric: psnr
   model_selection_mode: maximize
   print_every: 10
@@ -24,5 +26,5 @@ training:
   backup_every: 25000
   max_it: 4000000
   decay_it: 4000000
-  lr_warmup: 5000
+  lr_warmup: 2500
 

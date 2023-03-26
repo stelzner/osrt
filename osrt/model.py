@@ -3,11 +3,15 @@ from torch import nn
 from osrt.encoder import OSRTEncoder, ImprovedSRTEncoder
 from osrt.decoder import SlotMixerDecoder, SpatialBroadcastDecoder, ImprovedSRTDecoder
 
+import osrt.layers as layers
+
 class OSRT(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         encoder_type = cfg['encoder']
         decoder_type = cfg['decoder']
+
+        layers.__USE_DEFAULT_INIT__ = cfg.get('use_default_init', False)
 
         if encoder_type == 'srt':
             self.encoder = ImprovedSRTEncoder(**cfg['encoder_kwargs'])

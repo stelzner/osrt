@@ -95,6 +95,27 @@ class MixingBlock(nn.Module):
         return s, w
 
 
+class RenderMLP(nn.Module):
+    def __init__(self, input_dim=1536+180, hidden_dim=1536):
+        super().__init__()
+        # According to Mehdi, this uses Leaky ReLUs, and a Sigmoid at the end
+        self.net = nn.Sequential(
+            SRTLinear(input_dim, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, 3),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
 class SlotMixerDecoder(nn.Module):
     """ The Slot Mixer Decoder proposed in the OSRT paper. """
     def __init__(self, num_att_blocks=2, pos_start_octave=0, layer_norm=False):
@@ -103,17 +124,9 @@ class SlotMixerDecoder(nn.Module):
                                                    pos_start_octave=pos_start_octave,
                                                    input_mlp=True, z_dim=1536)
         self.mixing_block = MixingBlock(layer_norm=layer_norm)
-        self.render_mlp = nn.Sequential(
-            SRTLinear(1536 + 180, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 3),
-        )
+        # Leaky ReLU! negative_slope = 0.01
+        # Sigmoid am Ende.
+        self.render_mlp = RenderMLP()
 
     def forward(self, slot_latents, camera_pos, rays, **kwargs):
         x, query_rays = self.allocation_transformer(slot_latents, camera_pos, rays)
@@ -129,17 +142,7 @@ class ImprovedSRTDecoder(nn.Module):
         self.allocation_transformer = RayPredictor(num_att_blocks=num_att_blocks,
                                                    pos_start_octave=pos_start_octave,
                                                    input_mlp=True, z_dim=768)
-        self.render_mlp = nn.Sequential(
-            SRTLinear(180, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 3),
-        )
+        self.render_mlp = RenderMLP(input_dim=180)
 
     def forward(self, set_latents, camera_pos, rays, **kwargs):
         x, _ = self.allocation_transformer(set_latents, camera_pos, rays)
@@ -157,14 +160,19 @@ class SpatialBroadcastDecoder(nn.Module):
         super().__init__()
         self.query_encoder = RayEncoder(pos_octaves=15, pos_start_octave=pos_start_octave,
                                         ray_octaves=15)
+        # This is different from the RenderMLP above in that it has an additional output
+        # for slot logits, and we do not want to Sigmoid that!
+        hidden_dim = 1536
         self.render_mlp = nn.Sequential(
-            SRTLinear(1536 + 180, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 1536),
-            nn.ReLU(),
-            SRTLinear(1536, 4),
+            SRTLinear(1536 + 180, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
+            SRTLinear(hidden_dim, 4),
         )
 
     def forward(self, slot_latent, camera_pos, rays, **kwargs):
@@ -178,7 +186,7 @@ class SpatialBroadcastDecoder(nn.Module):
 
         outputs = self.render_mlp(queries_with_slots)
         logits = outputs[..., 0]
-        slot_pixels = outputs[..., 1:]
+        slot_pixels = torch.sigmoid(outputs[..., 1:])
 
         weights = logits.softmax(2)
         pixels = (slot_pixels * weights.unsqueeze(-1)).sum(2)

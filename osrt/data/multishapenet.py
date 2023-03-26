@@ -7,7 +7,7 @@ import numpy as np
 
 class MultishapenetDataset(IterableDataset):
     def __init__(self, path, mode, points_per_item=8192, max_len=None, canonical_view=True,
-                 full_scale=False, osrt=False):
+                 full_scale=False, osrt=False, shuffle=None):
         super(MultishapenetDataset).__init__()
         self.num_target_pixels = points_per_item
         self.path = path
@@ -15,6 +15,7 @@ class MultishapenetDataset(IterableDataset):
         self.canonical = canonical_view
         self.full_scale = full_scale
         self.osrt = osrt
+        self.shuffle = shuffle
 
         self.render_kwargs = {
             'min_dist': 0.,
@@ -24,7 +25,7 @@ class MultishapenetDataset(IterableDataset):
         builder = sunds.builder('multi_shapenet', data_dir=self.path)
 
         self.tf_dataset = builder.as_dataset(
-            split=self.mode, 
+            split=self.mode,
             task=sunds.tasks.Nerf(yield_mode='stacked',
                                   additional_camera_specs={'instance_image'} if osrt else {}),
         )
@@ -48,8 +49,8 @@ class MultishapenetDataset(IterableDataset):
                 dataset = dataset.take(num_shardable_items)
             dataset = dataset.shard(num_shards=world_size, index=rank)
 
-        if self.mode == 'train':
-            dataset = dataset.shuffle(1024)
+        if self.shuffle is not None and self.mode == 'train':
+            dataset = dataset.shuffle(self.shuffle)
         tf_iterator = dataset.as_numpy_iterator()
 
         for data in tf_iterator:
