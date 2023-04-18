@@ -58,7 +58,7 @@ used during training. Due to memory constraint, we were unable to match OSRT's s
 Our largest and most successful run thus far utilized 2304 target rays per scene as opposed to the
 8192 specified in the paper. It reached a foreground ARI of around 0.73 and a PSNR of 22.8 after
 750k iterations. For download, we provide both the
-[checkpoint](https://drive.google.com/file/d/1EAxajGk0guvKtj0FLjza24pMbdV0p7br/view?usp=sharing).
+[checkpoint](https://drive.google.com/file/d/1EAxajGk0guvKtj0FLjza24pMbdV0p7br/view?usp=sharing)
 and a
 [sample video](https://drive.google.com/file/d/1m0H4Sk2DjldCdJ_O3k3siXehuk_dyd_M/view).
 
