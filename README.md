@@ -62,6 +62,9 @@ Our largest and most successful run thus far utilized 2304 target rays per scene
 and a
 [sample video](https://drive.google.com/file/d/1m0H4Sk2DjldCdJ_O3k3siXehuk_dyd_M/view).
 
+To match the memory availability of your hardware, consider adjusting `data/num_points` or
+`training/batch_size` in `config.yaml`. However, setting these too low can make the model prone to
+getting stuck in local optima, especially early in training.
 
 ## Citation
 
