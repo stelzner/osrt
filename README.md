@@ -1,4 +1,4 @@
-# SRT: Scene Representation Transformer
+GGSRT: Scene Representation Transformer
 
 This is an independent PyTorch implementation of OSRT, as presented in the paper
 ["Object Scene Representation Transformer"](https://osrt-paper.github.io/) by Sajjadi et al.
@@ -53,8 +53,6 @@ Rendered frames and videos are placed in the run directory. Check the args of `r
 and `compile_video.py` for different ways of compiling videos.
 
 ## Results
-<img src="https://drive.google.com/uc?id=1UENZEp4OydMHDUOz8ySOfa0eTWyrwxYy" alt="MSN Rotation" width="750"/>
-
 We have found OSRT's object segmentation performance to be strongly dependent on the batch sizes
 used during training. Due to memory constraint, we were unable to match OSRT's setting on MSN-hard.
 Our largest and most successful run thus far utilized 2304 target rays per scene as opposed to the
