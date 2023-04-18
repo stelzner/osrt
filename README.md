@@ -4,6 +4,7 @@ This is an independent PyTorch implementation of OSRT, as presented in the paper
 ["Object Scene Representation Transformer"](https://osrt-paper.github.io/) by Sajjadi et al.
 All credit for the model goes to the original authors.
 
+<img src="https://drive.google.com/uc?id=1Gsoxlab6c3wOL0Bdj6SEV8L1RsI-mhWF" alt="MSN Example" width="900"/>
 
 ## Setup
 After cloning the repository and creating a new conda environment, the following steps will get you started:
@@ -58,8 +59,10 @@ We have found OSRT's object segmentation performance to be strongly dependent on
 used during training. Due to memory constraint, we were unable to match OSRT's setting on MSN-hard.
 Our largest and most successful run thus far utilized 2304 target rays per scene as opposed to the
 8192 specified in the paper. It reached a foreground ARI of around 0.73 and a PSNR of 22.8 after
-750k iterations. The checkpoint may be downloaded
-[here](https://drive.google.com/file/d/1EAxajGk0guvKtj0FLjza24pMbdV0p7br/view?usp=sharing).
+750k iterations. For download, we provide both the
+[checkpoint](https://drive.google.com/file/d/1EAxajGk0guvKtj0FLjza24pMbdV0p7br/view?usp=sharing).
+and a
+[sample video](https://drive.google.com/file/d/1m0H4Sk2DjldCdJ_O3k3siXehuk_dyd_M/view).
 
 
 ## Citation
