@@ -52,11 +52,15 @@ Rendered frames and videos are placed in the run directory. Check the args of `r
 and `compile_video.py` for different ways of compiling videos.
 
 ## Results
+<img src="https://drive.google.com/uc?id=1UENZEp4OydMHDUOz8ySOfa0eTWyrwxYy" alt="MSN Rotation" width="750"/>
+
 We have found OSRT's object segmentation performance to be strongly dependent on the batch sizes
 used during training. Due to memory constraint, we were unable to match OSRT's setting on MSN-hard.
 Our largest and most successful run thus far utilized 2304 target rays per scene as opposed to the
 8192 specified in the paper. It reached a foreground ARI of around 0.73 and a PSNR of 22.8 after
-750k iterations. The checkpoint may be downloaded here: 
+750k iterations. The checkpoint may be downloaded
+[here](https://drive.google.com/file/d/1EAxajGk0guvKtj0FLjza24pMbdV0p7br/view?usp=sharing).
+
 
 ## Citation
 

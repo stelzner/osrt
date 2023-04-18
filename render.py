@@ -11,10 +11,10 @@ from osrt.data import get_dataset
 from osrt.checkpoint import Checkpoint
 from osrt.utils.visualize import visualize_2d_cluster, get_clustering_colors
 from osrt.utils.nerf import rotate_around_z_axis_torch, get_camera_rays, transform_points_torch, get_extrinsic_torch
-from osrt.model import SRT
+from osrt.model import OSRT
 from osrt.trainer import SRTTrainer
 
-from compile_video import compile_video_render
+from compile_video import compile_video_render, compile_video_plot
 
 
 def get_camera_rays_render(camera_pos, **kwargs):
@@ -117,6 +117,14 @@ def render3d(trainer, render_path, z, camera_pos, motion, transform=None, resolu
             depths = (depths / render_kwargs['max_dist'] * 255.).astype(np.uint8)
             imageio.imwrite(os.path.join(render_path, 'depths', f'{frame}.png'), depths)
 
+        if 'segmentation' in extras:
+            pred_seg = extras['segmentation'].squeeze(0).cpu()
+            colors = get_clustering_colors(pred_seg.shape[-1] + 1)
+            pred_seg = pred_seg.argmax(-1).numpy() + 1
+            pred_img = visualize_2d_cluster(pred_seg, colors)
+            pred_img = (pred_img * 255.).astype(np.uint8)
+            imageio.imwrite(os.path.join(render_path, 'segmentations', f'{frame}.png'), pred_img)
+
 
 def process_scene(sceneid):
     render_path = os.path.join(out_dir, 'render', args.name, str(sceneid))
@@ -124,7 +132,7 @@ def process_scene(sceneid):
         print(f'Warning: Path {render_path} exists. Contents will be overwritten.')
 
     os.makedirs(render_path, exist_ok=True)
-    subdirs = ['renders', 'depths']
+    subdirs = ['renders', 'depths', 'segmentations']
     for d in subdirs:
         os.makedirs(os.path.join(render_path, d), exist_ok=True)
 
@@ -155,12 +163,13 @@ def process_scene(sceneid):
 
     with torch.no_grad():
         z = model.encoder(input_images, input_camera_pos, input_rays)
-                                          
+        print('Rendering frames...')
         render3d(trainer, render_path, z, input_camera_pos[:, 0],
                  motion=args.motion, transform=transform, resolution=resolution, **render_kwargs)
 
     if not args.novideo:
-        compile_video_render(render_path)
+        print('Compiling plot video...')
+        compile_video_plot(render_path, frames=True, num_frames=args.num_frames)
 
 if __name__ == '__main__':
     # Arguments
@@ -201,7 +210,7 @@ if __name__ == '__main__':
     else:
         render_kwargs = dict()
 
-    model = SRT(cfg['model']).to(device)
+    model = OSRT(cfg['model']).to(device)
     model.eval()
 
     mode = 'train' if args.train else 'val'
