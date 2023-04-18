@@ -1,4 +1,4 @@
-GGSRT: Scene Representation Transformer
+#OSRT: Object Scene Representation Transformer
 
 This is an independent PyTorch implementation of OSRT, as presented in the paper
 ["Object Scene Representation Transformer"](https://osrt-paper.github.io/) by Sajjadi et al.
