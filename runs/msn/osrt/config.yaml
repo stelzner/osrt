@@ -1,7 +1,7 @@
 
 data:
   dataset: osrt
-  num_points: 4096
+  num_points: 2304
 model:
   encoder: osrt
   encoder_kwargs:
@@ -13,13 +13,13 @@ model:
 
 training:
   num_workers: 1
-  batch_size: 48
+  batch_size: 256
   model_selection_metric: psnr
   model_selection_mode: maximize
   print_every: 10
-  visualize_every: 5000
-  validate_every: 5000
-  checkpoint_every: 1000
+  visualize_every: 2000
+  validate_every: 2000
+  checkpoint_every: 200
   backup_every: 25000
   max_it: 4000000
   decay_it: 4000000

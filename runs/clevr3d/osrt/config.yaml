@@ -1,14 +1,14 @@
 
 data:
   dataset: clevr3d
-  num_points: 2048
+  num_points: 8192
   kwargs:
     downsample: 1
 model:
   encoder: osrt
   encoder_kwargs:
     pos_start_octave: -5
-    num_slots: 7
+    num_slots: 6
   decoder: slot_mixer
   decoder_kwargs:
     pos_start_octave: -5

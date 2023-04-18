@@ -12,16 +12,17 @@ After cloning the repository and creating a new conda environment, the following
 The code currently supports the following datasets. Simply download and place (or symlink) them in the data directory.
 
 - The 3D datasets introduced by [ObSuRF](https://stelzner.github.io/obsurf/).
-- SRT's [MultiShapeNet (MSN)](https://srt-paper.github.io/#dataset) dataset, specifically version 2.3.3. It may be downloaded via gsutil:
+- OSRT's [MultiShapeNet (MSN-hard)](https://osrt-paper.github.io/#dataset) dataset. It may be downloaded via gsutil:
  ```
  pip install gsutil
- mkdir -p data/msn/multi_shapenet_frames/
- gsutil -m cp -r gs://kubric-public/tfds/multi_shapenet_frames/2.3.3/ data/msn/multi_shapenet_frames/
+ mkdir -p data/osrt/multi_shapenet_frames/
+ gsutil -m cp -r gs://kubric-public/tfds/kubric-frames/multi_shapenet_conditional/2.8.0/ data/osrt/multi_shapenet_frames/
  ```
 
 ### Dependencies
-This code requires at least Python 3.9 and [PyTorch 1.11](https://pytorch.org/get-started/locally/). Additional dependencies may be installed via `pip -r requirements.txt`.
-Note that Tensorflow is required to load SRT's MultiShapeNet data, though the CPU version suffices.
+This code requires at least Python 3.9 and [PyTorch 1.11](https://pytorch.org/get-started/locally/).
+Additional dependencies may be installed via `pip -r requirements.txt`. Note that Tensorflow is
+required to load OSRT's MultiShapeNet data, though the CPU version suffices.
 
 Rendering videos additionally depends on `ffmpeg>=4.3` being available in your `$PATH`.
 
@@ -37,16 +38,25 @@ To train on multiple GPUs on a single machine, launch multiple processes via [To
 ```
 torchrun --standalone --nnodes 1 --nproc_per_node $NUM_GPUS train.py runs/clevr3d/osrt/config.yaml
 ```
-Checkpoints are automatically stored in and (if available) loaded from the run directory. Visualizations and evaluations are produced periodically.
-Check the args of `train.py` for additional options. Importantly, to log training progress, use the `--wandb` flag to enable [Weights & Biases](https://wandb.ai).
+Checkpoints are automatically stored in and (if available) loaded from the run directory.
+Visualizations and evaluations are produced periodically.  Check the args of `train.py` for
+additional options. Importantly, to log training progress, use the `--wandb` flag to enable [Weights
+& Biases](https://wandb.ai).
 
 ### Rendering videos
 Videos may be rendered using `render.py`, e.g.
 ```
-python render.py runs/clevr3d/osrt/config.yaml --sceneid 1 --motion rotate_and_closeup --fade
+python render.py runs/msn/osrt/config.yaml --sceneid 1 --motion rotate_and_closeup --fade
 ```
 Rendered frames and videos are placed in the run directory. Check the args of `render.py` for various camera movements,
 and `compile_video.py` for different ways of compiling videos.
+
+## Results
+We have found OSRT's object segmentation performance to be strongly dependent on the batch sizes
+used during training. Due to memory constraint, we were unable to match OSRT's setting on MSN-hard.
+Our largest and most successful run thus far utilized 2304 target rays per scene as opposed to the
+8192 specified in the paper. It reached a foreground ARI of around 0.73 and a PSNR of 22.8 after
+750k iterations. The checkpoint may be downloaded here: 
 
 ## Citation
 
@@ -63,7 +73,7 @@ and `compile_video.py` for different ways of compiling videos.
 			and Kipf, Thomas
 			},
   title = {{Object Scene Representation Transformer}},
-  journal = {arXiv preprint arXiv:2206.06922},
+  journal = {NeurIPS},
   year  = {2022}
 }
 ```
