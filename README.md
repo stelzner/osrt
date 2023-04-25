@@ -55,8 +55,9 @@ and `compile_video.py` for different ways of compiling videos.
 ## Results
 We have found OSRT's object segmentation performance to be strongly dependent on the batch sizes
 used during training. Due to memory constraints, we were unable to match OSRT's settings on MSN-hard.
-Our largest and most successful run thus far utilized 2304 target rays per scene as opposed to the
-8192 specified in the paper. It reached a foreground ARI of around 0.73 and a PSNR of 22.8 after
+We conducted our largest and most successful run thus far on 8 A100 GPUs with 80GB VRAM each,
+utilizing 2304 target rays per scene as opposed to the 8192 specified in the paper.
+It reached a foreground ARI of around 0.73 and a PSNR of 22.8 after
 750k iterations. For download, we provide both the
 [checkpoint](https://drive.google.com/file/d/1EAxajGk0guvKtj0FLjza24pMbdV0p7br/view?usp=sharing)
 and a
