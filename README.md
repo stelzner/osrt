@@ -67,6 +67,9 @@ To match the memory availability of your hardware, consider adjusting `data/num_
 `training/batch_size` in `config.yaml`. However, setting these too low can make the model prone to
 getting stuck in local optima, especially early in training.
 
+We also provide a [checkpoint for CLEVR3D](https://drive.google.com/file/d/1HCwrVPWHWErGF5K_Oud5xKCWqdP-pxkB/view), with a Fg-ARI of over 0.97.
+Note that this number isn't reached on every run though, as there are some other optima the model can fall into.
+
 ## Citation
 
 ```
