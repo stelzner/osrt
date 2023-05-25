@@ -17,7 +17,7 @@ The code currently supports the following datasets. Simply download and place (o
  ```
  pip install gsutil
  mkdir -p data/osrt/multi_shapenet_frames/
- gsutil -m cp -r gs://kubric-public/tfds/kubric-frames/multi_shapenet_conditional/2.8.0/ data/osrt/multi_shapenet_frames/
+ gsutil -m cp -r gs://kubric-public/tfds/kubric_frames/multi_shapenet_conditional/2.8.0/ data/osrt/multi_shapenet_frames/
  ```
 
 ### Dependencies
